@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Fluid Particle Animation</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #000;
+        font-family: "Archivo Black", sans-serif;
+        color: white;
+      }
+
+      #c {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+
+    <script>
+      // Configuration
+      const config = {
+          maxParticles: 350,
+          colorScheme: 0,
+          particleSize: 2.2
+      };
+
+      // 10-12 different color palettes
+      const colorPalettes = [
+          'rainbow', 'red', 'green', 'blue', 'monochrome', 
+          'yellow', 'purple', 'cyan', 'magenta', 'orange', 'pink', 'lime'
+      ];
+
+      // Canvas setup
+      const canvas = document.getElementById('c');
+      const ctx = canvas.getContext('2d');
+      let canvasWidth = canvas.width = window.innerWidth;
+      let canvasHeight = canvas.height = window.innerHeight;
+
+      // Animation state
+      let particles = [];
+      let heartPath = [];
+      let animationRunning = false;
+      let touchActive = false;
+      let touchX = canvasWidth / 2;
+      let touchY = canvasHeight / 2;
+
+      // Initialize permanent heart shape coordinates
+      function initHeartPath() {
+          heartPath = [];
+          const PI2 = 6.28318;
+          const steps = 300; 
+          
+          for (let i = 0; i < steps; i++) {
+              const t = (i / steps) * PI2;
+              heartPath.push([
+                  canvasWidth/2 + 180 * Math.pow(Math.sin(t), 3),
+                  canvasHeight/2 + 10 * (-(15 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)))
+              ]);
+          }
+      }
+
+      // Create a single particle targeted to a random point on the heart
+      function createParticle() {
+          if (heartPath.length === 0) initHeartPath();
+
+          const targetPoint = heartPath[Math.floor(Math.random() * heartPath.length)];
+          
+          let hue, saturation = 80;
+          let brightness = 70;
+          
+          const activeScheme = colorPalettes[config.colorScheme];
+
+          switch(activeScheme) {
+              case 'red': hue = Math.random() * 20 + 350; break;
+              case 'blue': hue = Math.random() * 20 + 200; break;
+              case 'green': hue = Math.random() * 20 + 100; break;
+              case 'yellow': hue = Math.random() * 20 + 50; break;
+              case 'purple': hue = Math.random() * 20 + 270; break;
+              case 'cyan': hue = Math.random() * 20 + 180; break;
+              case 'magenta': hue = Math.random() * 20 + 300; break;
+              case 'orange': hue = Math.random() * 20 + 20; break;
+              case 'pink': hue = Math.random() * 20 + 330; break;
+              case 'lime': hue = Math.random() * 20 + 80; break;
+              case 'monochrome': hue = 0; saturation = 0; break;
+              default: hue = Math.random() * 360; 
+          }
+
+          return {
+              x: canvasWidth / 2 + (Math.random() - 0.5) * 40,
+              y: canvasHeight / 2 + (Math.random() - 0.5) * 40,
+              targetX: targetPoint[0] + (Math.random() - 0.5) * 4,
+              targetY: targetPoint[1] + (Math.random() - 0.5) * 4,
+              radius: config.particleSize,
+              color: `hsla(${hue},${saturation}%,${brightness}%, 0.9)`,
+              speed: Math.random() * 0.03 + 0.015,
+              vx: 0,
+              vy: 0
+          };
+      }
+
+      // Initial particles setup
+      function initParticles() {
+          particles = [];
+          initHeartPath();
+          for (let i = 0; i < 150; i++) {
+              particles.push(createParticle());
+          }
+      }
+
+      // Render a single particle
+      function renderParticle(p) {
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+      }
+
+      // Main animation loop
+      function animationLoop() {
+          if (!animationRunning) return;
+
+          try {
+              ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+              ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+              if (particles.length < config.maxParticles) {
+                  particles.push(createParticle());
+              }
+
+              particles.forEach((p, index) => {
+                  if (touchActive) {
+                      // Fluid behavior: pull towards touch point when holding screen
+                      let dx = touchX - p.x;
+                      let dy = touchY - p.y;
+                      let dist = Math.sqrt(dx * dx + dy * dy);
+                      
+                      if (dist < 300) {
+                          p.vx += (dx / dist) * 0.5;
+                          p.vy += (dy / dist) * 0.5;
+                      }
+                      p.vx *= 0.92;
+                      p.vy *= 0.92;
+                      p.x += p.vx;
+                      p.y += p.vy;
+                  } else {
+                      // Normal heart shape attraction
+                      const dx = p.targetX - p.x;
+                      const dy = p.targetY - p.y;
+
+                      p.x += dx * p.speed;
+                      p.y += dy * p.speed;
+
+                      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+                          particles.splice(index, 1);
+                          particles.push(createParticle());
+                      }
+                  }
+
+                  renderParticle(p);
+              });
+          } catch (error) {
+              console.error("Animation error:", error);
+          }
+
+          requestAnimationFrame(animationLoop);
+      }
+
+      // Setup event listeners for touch hold and double tap
+      function setupListeners() {
+          // Mouse / Desktop support
+          window.addEventListener('mousedown', (e) => {
+              touchActive = true;
+              touchX = e.clientX;
+              touchY = e.clientY;
+          });
+          window.addEventListener('mousemove', (e) => {
+              if (touchActive) {
+                  touchX = e.clientX;
+                  touchY = e.clientY;
+              }
+          });
+          window.addEventListener('mouseup', () => {
+              touchActive = false;
+          });
+
+          // Mobile touch support
+          window.addEventListener('touchstart', (e) => {
+              touchActive = true;
+              touchX = e.touches[0].clientX;
+              touchY = e.touches[0].clientY;
+          }, { passive: true });
+
+          window.addEventListener('touchmove', (e) => {
+              if (touchActive) {
+                  touchX = e.touches[0].clientX;
+                  touchY = e.touches[0].clientY;
+              }
+          }, { passive: true });
+
+          window.addEventListener('touchend', (e) => {
+              touchActive = false;
+          });
+
+          // Double tap to change color scheme
+          let lastTouchTime = 0;
+          document.addEventListener('touchend', (e) => {
+              const currentTime = new Date().getTime();
+              const tapLength = currentTime - lastTouchTime;
+              if (tapLength < 300 && tapLength > 0) {
+                  config.colorScheme = (config.colorScheme + 1) % colorPalettes.length;
+                  initParticles();
+                  e.preventDefault();
+              }
+              lastTouchTime = currentTime;
+          }, { passive: false });
+
+          window.addEventListener('resize', () => {
+              canvasWidth = canvas.width = window.innerWidth;
+              canvasHeight = canvas.height = window.innerHeight;
+              initHeartPath();
+          });
+      }
+
+      // Initialize everything
+      function init() {
+          canvas.style.display = 'block';
+          animationRunning = true;
+          setupListeners();
+          initParticles();
+          animationLoop();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
+```[cite: 1]
